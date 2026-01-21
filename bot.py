@@ -1,8 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-DARKVEIL 0.03 - Telegram Bot (Переписан на aiogram)
-Исправлены функции, добавлена автоочистка логов
-Все тексты вынесены в texts.py
+DARKVEIL 0.03 | BOT - v1.0
+LAST UPDATE - 14:51
 """
 
 import asyncio
@@ -1063,8 +1062,75 @@ async def mode_param_input_process(message: Message, state: FSMContext):
 
 @router.message(UserStates.function_param_input)
 async def function_param_input_process(message: Message, state: FSMContext):
-    """Обработка ввода параметра функции"""
-    await universal_input_process(message, state, 'function')
+    """Обработка ввода параметра функции - с возвратом в меню функции"""
+    user_id = message.from_user.id
+    input_text = message.text.strip()
+    data = await state.get_data()
+    
+    func_key = data.get('editing_func')
+    param = data.get('editing_param')
+    
+    # Удаляем сообщение пользователя
+    try:
+        await message.delete()
+    except:
+        pass
+    
+    if not func_key or not param:
+        await functions_main_handler(FakeCallback(user_id, 'functions_main'), state)
+        return
+    
+    try:
+        # Определяем тип значения
+        settings = db.get_script_settings(user_id)
+        
+        if param in ['doubcust', 'waitcust', 'fullcust', 'rskincust', 'multincust']:
+            value = int(input_text)
+        else:
+            value = float(input_text.replace(',', '.'))
+        
+        if value < 0:
+            raise ValueError("Значение не может быть отрицательным")
+        
+        # Сохраняем значение
+        settings[param] = value
+        db.save_script_settings(user_id, settings)
+        
+        # Возвращаемся к меню настройки конкретной функции
+        await function_view_handler(FakeCallback(user_id, f'function_view_{func_key}'), state)
+        
+    except ValueError as e:
+        # Показываем ошибку и предлагаем повторить ввод
+        error_text = f"❌ Ошибка: {str(e)}\n\nВведите правильное значение:"
+        
+        # Получаем данные функции для повторного отображения
+        func_data = texts.get_text(f"FUNCTIONS.functions.{func_key}")
+        func_name = func_data['name']
+        
+        # Получаем описание параметра
+        param_description = ""
+        if 'param' in func_data and func_data['param'] == param:
+            param_description = func_data.get('param_description', '')
+        elif 'params' in func_data and param in func_data['params']:
+            param_descriptions = func_data.get('param_descriptions', {})
+            param_description = param_descriptions.get(param, '')
+        
+        # Формируем полный текст с ошибкой
+        text = f"{error_text}\n\n"
+        text += texts.get_text("FUNCTIONS.edit_param_screen",
+                             func_name=func_name,
+                             param=param,
+                             param_description=param_description,
+                             value=input_text)
+        
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=texts.get_text("BUTTONS.back"), callback_data=f'function_view_{func_key}')]
+        ])
+        
+        await edit_or_send_message(user_id, text, keyboard)
+    except Exception as e:
+        logger.error(f"Ошибка в function_param_input_process: {e}")
+        await function_view_handler(FakeCallback(user_id, f'function_view_{func_key}'), state)
 
 @router.message(UserStates.saleskin_input)
 async def saleskin_input_process(message: Message, state: FSMContext):
@@ -2210,6 +2276,20 @@ async def admin_key_detail_handler(callback: CallbackQuery, state: FSMContext):
     
     await edit_or_send_message(user_id, text, keyboard)
     await state.set_state(UserStates.admin_key_detail)
+
+@router.callback_query(F.data.startswith("key_freeze_"))
+async def key_freeze_handler(callback: CallbackQuery, state: FSMContext):
+    """Заморозить ключ - мгновенное обновление"""
+    user_id = callback.from_user.id
+    key_id = int(callback.data.replace('key_freeze_', ''))
+    
+    key = db.get_key_by_id(key_id)
+    if not key:
+        return
+    
+    if db.freeze_key(key_id):
+        # Мгновенно обновляем меню ключа
+        await admin_key_detail_handler(callback, state)
 
 @router.callback_query(F.data.startswith("key_unfreeze_"))
 async def key_unfreeze_handler(callback: CallbackQuery, state: FSMContext):
