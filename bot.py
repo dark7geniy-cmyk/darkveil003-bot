@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-DARKVEIL 0.04 - Telegram Bot (Переписан на aiogram)
+DARKVEIL 0.03 - Telegram Bot (Переписан на aiogram)
 Исправлены функции, добавлена автоочистка логов
 Все тексты вынесены в texts.py
 """
@@ -509,7 +509,7 @@ async def script_main_handler(callback: CallbackQuery, state: FSMContext):
     await show_script_main_panel(callback, state)
 
 async def show_script_main_panel(callback: CallbackQuery, state: FSMContext):
-    """Показывает основную панель скрипта"""
+    """Показывает основную панель скрипта с исправленной кнопкой Параметры"""
     user_id = callback.from_user.id
     
     active_users_in_script_control[user_id] = datetime.now()
@@ -551,6 +551,7 @@ async def show_script_main_panel(callback: CallbackQuery, state: FSMContext):
             [InlineKeyboardButton(text=texts.get_text("SCRIPT_SECTION.buttons.parameters"), callback_data='parameters_main')]
         ])
     else:
+        # При включенном скрипте кнопка Параметры на всю строку
         keyboard_buttons.extend([
             [
                 InlineKeyboardButton(text=texts.get_text("SCRIPT_SECTION.buttons.delays"), callback_data='delays_main'),
@@ -560,10 +561,7 @@ async def show_script_main_panel(callback: CallbackQuery, state: FSMContext):
                 InlineKeyboardButton(text=texts.get_text("SCRIPT_SECTION.buttons.modes"), callback_data='modes_main'),
                 InlineKeyboardButton(text=texts.get_text("SCRIPT_SECTION.buttons.functions"), callback_data='functions_main')
             ],
-            [
-                InlineKeyboardButton(text=texts.get_text("SCRIPT_SECTION.buttons.parameters"), callback_data='parameters_main'),
-                InlineKeyboardButton(text=texts.get_text("MESSAGES.empty_button"), callback_data="empty")
-            ]
+            [InlineKeyboardButton(text=texts.get_text("SCRIPT_SECTION.buttons.parameters"), callback_data='parameters_main')]
         ])
     
     keyboard_buttons.append([InlineKeyboardButton(text=texts.get_text("BUTTONS.back"), callback_data='menu_main')])
@@ -957,21 +955,18 @@ async def color_input_process(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "delays_main")
 async def delays_main_handler(callback: CallbackQuery, state: FSMContext):
-    """Главное меню задержек - КРАСИВОЕ ОТОБРАЖЕНИЕ"""
+    """Главное меню задержек - только основные задержки"""
     user_id = callback.from_user.id
     settings = db.get_script_settings(user_id)
     
-    # Формируем красивое отображение задержек
+    # Формируем красивое отображение только основных задержек
     delay_params = ['dbclickS', 'opkeyS', 'befordS', 'aftordS', 'actreqS', 
-                    'reslotS', 'aftpasteS', 'clkeyS', 'inpordS', 'dcpasteS', 
-                    'prinpS', 'doubcust', 'waitcust']
+                    'reslotS', 'aftpasteS', 'clkeyS']
     
-    # Группируем задержки по категориям для красивого отображения
+    # Группируем задержки по категориям
     delay_groups = {
         "Основные": ['dbclickS', 'opkeyS', 'befordS', 'aftordS'],
-        "Действия": ['actreqS', 'reslotS', 'aftpasteS', 'clkeyS'],
-        "Перебив": ['inpordS', 'dcpasteS', 'prinpS'],
-        "Функции": ['doubcust', 'waitcust']
+        "Действия": ['actreqS', 'reslotS', 'aftpasteS', 'clkeyS']
     }
     
     delay_lines = []
@@ -987,7 +982,7 @@ async def delays_main_handler(callback: CallbackQuery, state: FSMContext):
     
     text = texts.get_text("DELAYS.main_screen", current_values=current_values)
     
-    # Создаем клавиатуру в стиле функций
+    # Создаем клавиатуру только с основными задержками
     keyboard_buttons = []
     
     # Первая строка: основные задержки
@@ -1006,37 +1001,17 @@ async def delays_main_handler(callback: CallbackQuery, state: FSMContext):
     
     # Вторая строка: действия
     row2 = []
-    for param in ['actreqS', 'reslotS']:
+    for param in ['actreqS', 'reslotS', 'aftpasteS', 'clkeyS']:
         value = settings.get(param, 0)
         row2.append(InlineKeyboardButton(
             text=f"⚡ {param}\n{value} мс", 
             callback_data=f'delay_edit_{param}'
         ))
-    keyboard_buttons.append(row2)
-    
-    # Третья строка: перебив
-    row3 = []
-    for param in ['inpordS', 'dcpasteS', 'prinpS']:
-        value = settings.get(param, 0)
-        row3.append(InlineKeyboardButton(
-            text=f"🎯 {param}\n{value} мс", 
-            callback_data=f'delay_edit_{param}'
-        ))
-        if len(row3) == 2:
-            keyboard_buttons.append(row3)
-            row3 = []
-    if row3:
-        keyboard_buttons.append(row3)
-    
-    # Четвертая строка: функции
-    row4 = []
-    for param in ['doubcust', 'waitcust']:
-        value = settings.get(param, 0)
-        row4.append(InlineKeyboardButton(
-            text=f"🧩 {param}\n{value} мс", 
-            callback_data=f'delay_edit_{param}'
-        ))
-    keyboard_buttons.append(row4)
+        if len(row2) == 2:
+            keyboard_buttons.append(row2)
+            row2 = []
+    if row2:
+        keyboard_buttons.append(row2)
     
     keyboard_buttons.append([InlineKeyboardButton(text=texts.get_text("BUTTONS.back"), callback_data='script_main')])
     
@@ -1253,7 +1228,7 @@ async def work_settings_handler(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("work_platform_"))
 async def work_platform_handler(callback: CallbackQuery, state: FSMContext):
-    """Выбор платформы"""
+    """Выбор платформы - без уведомлений"""
     user_id = callback.from_user.id
     platform = callback.data.replace('work_platform_', '')
     
@@ -1263,22 +1238,19 @@ async def work_platform_handler(callback: CallbackQuery, state: FSMContext):
         settings['dcpaste'] = True
         settings['keypaste'] = False
         settings['inpord'] = False
-        text = texts.get_text("WORK_SETTINGS.platform_changed.pc")
     else:
         settings['dcpaste'] = False
         settings['keypaste'] = True
         settings['inpord'] = False
-        text = texts.get_text("WORK_SETTINGS.platform_changed.phone")
     
     db.save_script_settings(user_id, settings)
     
-    # Показываем уведомление
-    await send_toast_notification(callback, text)
+    # Просто обновляем меню без уведомлений
     await work_settings_handler(callback, state)
 
 @router.callback_query(F.data == "work_change_platform")
 async def work_change_platform_handler(callback: CallbackQuery, state: FSMContext):
-    """Смена платформы"""
+    """Смена платформы - без уведомлений"""
     user_id = callback.from_user.id
     settings = db.get_script_settings(user_id)
     
@@ -1287,8 +1259,7 @@ async def work_change_platform_handler(callback: CallbackQuery, state: FSMContex
     
     db.save_script_settings(user_id, settings)
     
-    text = texts.get_text("WORK_SETTINGS.platform_changed.reset")
-    await send_toast_notification(callback, text)
+    # Просто обновляем меню без уведомлений
     await work_settings_handler(callback, state)
 
 @router.callback_query(F.data == "work_inpord")
@@ -2128,7 +2099,7 @@ async def admin_keys_handler(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("key_view_"))
 async def admin_key_detail_handler(callback: CallbackQuery, state: FSMContext):
-    """Детали ключа"""
+    """Детали ключа - с новым расположением кнопок"""
     user_id = callback.from_user.id
     
     if user_id not in config.ADMIN_IDS:
@@ -2175,23 +2146,31 @@ async def admin_key_detail_handler(callback: CallbackQuery, state: FSMContext):
     keyboard_buttons = []
     
     if key['activated_by']:
-        # Ключ активирован
+        # Ключ активирован - новая структура кнопок
         if key['is_frozen']:
-            keyboard_buttons.append([InlineKeyboardButton(
-                text=texts.get_text("KEYS.management.actions.unfreeze"), 
-                callback_data=f'key_unfreeze_{key_id}'
-            )])
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=texts.get_text("KEYS.management.actions.unfreeze"), 
+                    callback_data=f'key_unfreeze_{key_id}'
+                ),
+                InlineKeyboardButton(
+                    text=texts.get_text("KEYS.management.actions.unbind"), 
+                    callback_data=f'key_unbind_{key_id}'
+                )
+            ])
         else:
-            keyboard_buttons.append([InlineKeyboardButton(
-                text=texts.get_text("KEYS.management.actions.freeze"), 
-                callback_data=f'key_freeze_{key_id}'
-            )])
+            keyboard_buttons.append([
+                InlineKeyboardButton(
+                    text=texts.get_text("KEYS.management.actions.freeze"), 
+                    callback_data=f'key_freeze_{key_id}'
+                ),
+                InlineKeyboardButton(
+                    text=texts.get_text("KEYS.management.actions.unbind"), 
+                    callback_data=f'key_unbind_{key_id}'
+                )
+            ])
         
-        keyboard_buttons.append([InlineKeyboardButton(
-            text=texts.get_text("KEYS.management.actions.unbind"), 
-            callback_data=f'key_unbind_{key_id}'
-        )])
-        
+        # Вторая строка: одна кнопка
         keyboard_buttons.append([InlineKeyboardButton(
             text=texts.get_text("KEYS.management.actions.delete"), 
             callback_data=f'key_delete_{key_id}'
@@ -2221,6 +2200,7 @@ async def admin_key_detail_handler(callback: CallbackQuery, state: FSMContext):
                 )
             ])
     
+    # Третья строка: одна кнопка Назад
     keyboard_buttons.append([InlineKeyboardButton(
         text=texts.get_text("BUTTONS.back"), 
         callback_data='admin_keys'
@@ -2231,27 +2211,9 @@ async def admin_key_detail_handler(callback: CallbackQuery, state: FSMContext):
     await edit_or_send_message(user_id, text, keyboard)
     await state.set_state(UserStates.admin_key_detail)
 
-@router.callback_query(F.data.startswith("key_freeze_"))
-async def key_freeze_handler(callback: CallbackQuery, state: FSMContext):
-    """Заморозить ключ"""
-    user_id = callback.from_user.id
-    key_id = int(callback.data.replace('key_freeze_', ''))
-    
-    key = db.get_key_by_id(key_id)
-    if not key:
-        return
-    
-    if db.freeze_key(key_id):
-        # Обновляем меню пользователя если он активен
-        if key['activated_by']:
-            await update_user_menu_if_active(key['activated_by'], texts.get_text("MESSAGES.key_action.frozen"))
-        
-        # Обновляем детали ключа у админа
-        await admin_key_detail_handler(callback, state)
-
 @router.callback_query(F.data.startswith("key_unfreeze_"))
 async def key_unfreeze_handler(callback: CallbackQuery, state: FSMContext):
-    """Разморозить ключ"""
+    """Разморозить ключ - мгновенное обновление"""
     user_id = callback.from_user.id
     key_id = int(callback.data.replace('key_unfreeze_', ''))
     
@@ -2260,16 +2222,12 @@ async def key_unfreeze_handler(callback: CallbackQuery, state: FSMContext):
         return
     
     if db.unfreeze_key(key_id):
-        # Обновляем меню пользователя если он активен
-        if key['activated_by']:
-            await update_user_menu_if_active(key['activated_by'], texts.get_text("MESSAGES.key_action.unfrozen"))
-        
-        # Обновляем детали ключа у админа
+        # Мгновенно обновляем меню ключа
         await admin_key_detail_handler(callback, state)
 
 @router.callback_query(F.data.startswith("key_unbind_"))
 async def key_unbind_handler(callback: CallbackQuery, state: FSMContext):
-    """Отвязать ключ"""
+    """Отвязать ключ - мгновенное обновление"""
     user_id = callback.from_user.id
     key_id = int(callback.data.replace('key_unbind_', ''))
     
@@ -2278,16 +2236,12 @@ async def key_unbind_handler(callback: CallbackQuery, state: FSMContext):
         return
     
     if db.unbind_key(key_id):
-        # Обновляем меню пользователя если он активен
-        if key['activated_by']:
-            await update_user_menu_if_active(key['activated_by'], texts.get_text("MESSAGES.key_action.unbind"))
-        
-        # Обновляем детали ключа у админа
+        # Мгновенно обновляем меню ключа
         await admin_key_detail_handler(callback, state)
 
 @router.callback_query(F.data.startswith("key_delete_"))
 async def key_delete_handler(callback: CallbackQuery, state: FSMContext):
-    """Удалить ключ"""
+    """Удалить ключ - мгновенное обновление"""
     user_id = callback.from_user.id
     key_id = int(callback.data.replace('key_delete_', ''))
     
@@ -2296,10 +2250,7 @@ async def key_delete_handler(callback: CallbackQuery, state: FSMContext):
         return
     
     if db.delete_key(key_id):
-        # Обновляем меню пользователя если он активен
-        if key['activated_by']:
-            await update_user_menu_if_active(key['activated_by'], "🗑️ Ваш ключ был удален администратором")
-        
+        # Обновляем список ключей
         await admin_keys_handler(callback, state)
 
 @router.callback_query(F.data == "admin_create_key")
